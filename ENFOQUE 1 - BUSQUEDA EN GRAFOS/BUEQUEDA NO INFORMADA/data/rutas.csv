@@ -1,0 +1,10 @@
+origen,destino
+Casa,Parada
+Parada,CETI_Entrada
+CETI_Entrada,Pasillo_A
+Pasillo_A,Salon
+Pasillo_A,Biblioteca
+Pasillo_A,Laboratorio
+Laboratorio,Cafeteria
+Cafeteria,Cancha
+Cancha,Estacionamiento
