@@ -1,217 +1,246 @@
-# búsqueda tabú
+# búsqueda con vuelta atrás
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# también conocida como:
+# backtracking
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# este algoritmo construye
+# una solución paso a paso
 #
-# para evitarlo se usa
-# una lista tabú
+# funcionamiento:
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# - intenta asignar valores
+# - verifica restricciones
+# - si algo falla:
+#   regresa y prueba otra opción
+#
+# esto evita continuar
+# con soluciones inválidas
+#
+# es muy utilizado
+# en problemas CSP
+# (problemas de satisfacción
+# de restricciones)
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def validar_restricciones(
+    asignacion,
+    restricciones
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    asignacion:
+        valores asignados actualmente
 
-    mejor_candidato = None
+    restricciones:
+        reglas del problema
 
-    mejor_puntaje = None
+    retorna:
+        True si la asignación es válida
+        False si existe conflicto
+    """
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
+    for regla in restricciones:
+
+        if not regla(asignacion):
+
+            return False
+
+    return True
+
+
+def algoritmo_backtracking(
+    variables,
+    dominios,
+    restricciones,
+    asignacion_actual=None
+):
+
+    """
+    variables:
+        lista de variables
+
+    dominios:
+        valores posibles
+        para cada variable
+
+    restricciones:
+        reglas que deben cumplirse
+
+    asignacion_actual:
+        decisiones realizadas
+        hasta el momento
+
+    retorna:
+        solución válida
+        o None
+    """
+
+    if asignacion_actual is None:
+
+        asignacion_actual = {}
+
+    # si todas las variables
+    # ya tienen valor
+    # entonces terminamos
+    if (
+        len(asignacion_actual)
+        == len(variables)
     ):
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
+        return asignacion_actual
 
-        puntaje = funcion_valor(vecino)
+    # seleccionar variable pendiente
+    for variable in variables:
 
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
-        ):
+        if variable not in asignacion_actual:
 
-            mejor_candidato = vecino
+            pendiente = variable
 
-            mejor_puntaje = puntaje
-
-    return mejor_candidato
-
-
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
-):
-
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
-
-    actual = inicio
-
-    # mejor estado encontrado
-    mejor_global = actual
-
-    historial = [actual]
-
-    # estructuras de memoria tabú
-    tabu = {actual}
-
-    cola_tabu = [actual]
-
-    for _ in range(iteraciones_maximas):
-
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
-        )
-
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
             break
 
-        # avanzar al siguiente estado
-        actual = siguiente
+    # probar cada valor posible
+    for valor in dominios[pendiente]:
 
-        historial.append(actual)
+        nueva_asignacion = (
+            asignacion_actual.copy()
+        )
 
-        # agregar a lista tabú
-        tabu.add(actual)
+        nueva_asignacion[pendiente] = valor
 
-        cola_tabu.append(actual)
-
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
-
-            estado_viejo = cola_tabu.pop(0)
-
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
-
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
+        # validar restricciones
+        if validar_restricciones(
+            nueva_asignacion,
+            restricciones
         ):
 
-            mejor_global = actual
+            resultado = algoritmo_backtracking(
+                variables,
+                dominios,
+                restricciones,
+                nueva_asignacion
+            )
 
-    return mejor_global, historial
+            # si la solución funcionó
+            # regresar resultado
+            if resultado is not None:
+
+                return resultado
+
+        # si falla:
+        # el algoritmo regresa
+        # automáticamente aquí
+        # y prueba otro valor
+
+    # si ningún valor funciona
+    # no existe solución
+    return None
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # ejemplo:
+    # asignación de horarios
+    # para exámenes
 
-    conexiones = {
+    variables = [
 
-        3: [4, 5, 6],
+        "mate",
 
-        4: [5, 6],
+        "fisica",
 
-        5: [4, 6, 7],
+        "programacion"
+    ]
 
-        6: [5, 7, 8],
+    # días disponibles
 
-        7: [6, 8, 9],
+    dominios = {
 
-        8: [7, 9],
+        "mate": [
+            "lunes",
+            "miercoles"
+        ],
 
-        9: [8]
+        "fisica": [
+            "lunes",
+            "miercoles"
+        ],
+
+        "programacion": [
+            "lunes",
+            "miercoles"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # restricción:
+    # no repetir días
 
-    def funcion_valor(x):
-        return x
+    def regla_dias_unicos(
+        asignacion
+    ):
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        dias = []
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        for materia in asignacion:
+
+            dias.append(
+                asignacion[materia]
+            )
+
+        return (
+            len(dias)
+            == len(set(dias))
+        )
+
+    # restricción:
+    # programación no puede ser lunes
+
+    def regla_programacion(
+        asignacion
+    ):
+
+        if "programacion" in asignacion:
+
+            return (
+                asignacion["programacion"]
+                != "lunes"
+            )
+
+        return True
+
+    restricciones = [
+
+        regla_dias_unicos,
+
+        regla_programacion
+    ]
+
+    solucion = algoritmo_backtracking(
+        variables,
+        dominios,
+        restricciones
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print("solución encontrada:")
+    print(solucion)
 
-    print("historial de movimientos:")
-    print(recorrido)
-
+    # explicación:
+    #
+    # 1. asigna valor a una variable
+    #
+    # 2. verifica restricciones
+    #
+    # 3. si algo falla:
+    #    regresa al paso anterior
+    #
+    # 4. prueba otra posibilidad
+    #
     # resumen:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - backtracking explora
+    #   combinaciones válidas
     #
-    # - esto reduce ciclos repetitivos
+    # - evita continuar
+    #   caminos incorrectos
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - cuando una decisión falla
+    #   el algoritmo retrocede

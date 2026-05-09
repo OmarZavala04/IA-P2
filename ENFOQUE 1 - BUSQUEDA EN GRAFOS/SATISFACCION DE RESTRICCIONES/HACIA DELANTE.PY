@@ -1,217 +1,335 @@
-# búsqueda tabú
+# comprobación hacia delante
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# también conocida como:
+# forward checking
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# idea principal:
 #
-# para evitarlo se usa
-# una lista tabú
+# cuando asigno un valor
+# reviso inmediatamente
+# si las demás variables
+# todavía tienen opciones válidas
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# si alguna variable
+# se queda sin posibilidades:
+# cancelo ese camino
+# antes de seguir
+#
+# ventaja:
+# detecta errores temprano
+#
+# diferencia:
+#
+# - backtracking normal:
+#   descubre errores más tarde
+#
+# - forward checking:
+#   revisa el futuro antes
+#   de continuar
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def validar_restricciones(
+    asignacion,
+    restricciones
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    asignacion:
+        valores actuales
 
-    mejor_candidato = None
+    restricciones:
+        reglas del problema
 
-    mejor_puntaje = None
+    retorna:
+        True si todo es válido
+        False si existe conflicto
+    """
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
-    ):
+    for regla in restricciones:
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
+        if not regla(asignacion):
 
-        puntaje = funcion_valor(vecino)
+            return False
 
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
-        ):
-
-            mejor_candidato = vecino
-
-            mejor_puntaje = puntaje
-
-    return mejor_candidato
+    return True
 
 
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
+def filtrar_dominio(
+    variable_objetivo,
+    asignacion_parcial,
+    dominios,
+    restricciones
 ):
 
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
+    """
+    revisa qué valores
+    siguen siendo posibles
+    para una variable
+    """
 
-    actual = inicio
+    valores_validos = []
 
-    # mejor estado encontrado
-    mejor_global = actual
+    for valor in dominios[variable_objetivo]:
 
-    historial = [actual]
-
-    # estructuras de memoria tabú
-    tabu = {actual}
-
-    cola_tabu = [actual]
-
-    for _ in range(iteraciones_maximas):
-
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
+        prueba = (
+            asignacion_parcial.copy()
         )
 
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
-            break
+        prueba[variable_objetivo] = valor
 
-        # avanzar al siguiente estado
-        actual = siguiente
-
-        historial.append(actual)
-
-        # agregar a lista tabú
-        tabu.add(actual)
-
-        cola_tabu.append(actual)
-
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
-
-            estado_viejo = cola_tabu.pop(0)
-
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
-
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
+        if validar_restricciones(
+            prueba,
+            restricciones
         ):
 
-            mejor_global = actual
+            valores_validos.append(valor)
 
-    return mejor_global, historial
+    return valores_validos
+
+
+def algoritmo_forward_checking(
+    variables,
+    dominios,
+    restricciones,
+    asignacion_actual=None
+):
+
+    """
+    variables:
+        variables del problema
+
+    dominios:
+        opciones posibles
+
+    restricciones:
+        reglas que deben cumplirse
+
+    asignacion_actual:
+        decisiones tomadas
+
+    retorna:
+        solución válida
+        o None
+    """
+
+    if asignacion_actual is None:
+
+        asignacion_actual = {}
+
+    print(
+        "asignación actual:",
+        asignacion_actual
+    )
+
+    # verificar solución completa
+    if (
+        len(asignacion_actual)
+        == len(variables)
+    ):
+
+        return asignacion_actual
+
+    # seleccionar variable pendiente
+    for variable in variables:
+
+        if variable not in asignacion_actual:
+
+            pendiente = variable
+
+            break
+
+    # probar valores posibles
+    for valor in dominios[pendiente]:
+
+        nueva_asignacion = (
+            asignacion_actual.copy()
+        )
+
+        nueva_asignacion[pendiente] = valor
+
+        print(
+            " probando",
+            pendiente,
+            "=",
+            valor
+        )
+
+        # verificar restricciones actuales
+        if not validar_restricciones(
+            nueva_asignacion,
+            restricciones
+        ):
+
+            print(
+                "  conflicto detectado"
+            )
+
+            continue
+
+        consistente = True
+
+        # comprobación hacia delante
+        #
+        # revisar si las variables
+        # restantes aún tienen opciones
+        for otra_variable in variables:
+
+            if (
+                otra_variable
+                not in nueva_asignacion
+            ):
+
+                dominio_restante = (
+                    filtrar_dominio(
+                        otra_variable,
+                        nueva_asignacion,
+                        dominios,
+                        restricciones
+                    )
+                )
+
+                print(
+                    "   dominio restante para",
+                    otra_variable,
+                    "->",
+                    dominio_restante
+                )
+
+                # si no quedan opciones
+                # este camino ya no sirve
+                if len(dominio_restante) == 0:
+
+                    print(
+                        "   sin opciones para",
+                        otra_variable
+                    )
+
+                    consistente = False
+
+                    break
+
+        # si falla:
+        # probar otro valor
+        if not consistente:
+
+            continue
+
+        # continuar búsqueda
+        resultado = algoritmo_forward_checking(
+            variables,
+            dominios,
+            restricciones,
+            nueva_asignacion
+        )
+
+        if resultado is not None:
+
+            return resultado
+
+    return None
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # ejemplo:
+    # horarios de exámenes
 
-    conexiones = {
+    variables = [
 
-        3: [4, 5, 6],
+        "mate",
 
-        4: [5, 6],
+        "fisica",
 
-        5: [4, 6, 7],
+        "programacion"
+    ]
 
-        6: [5, 7, 8],
+    dominios = {
 
-        7: [6, 8, 9],
+        "mate": [
+            "lunes",
+            "miercoles"
+        ],
 
-        8: [7, 9],
+        "fisica": [
+            "lunes",
+            "miercoles"
+        ],
 
-        9: [8]
+        "programacion": [
+            "lunes",
+            "miercoles"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # restricción:
+    # no repetir días
 
-    def funcion_valor(x):
-        return x
+    def regla_dias_unicos(
+        asignacion
+    ):
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        dias = []
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        for materia in asignacion:
+
+            dias.append(
+                asignacion[materia]
+            )
+
+        return (
+            len(dias)
+            == len(set(dias))
+        )
+
+    # restricción:
+    # programación no puede ser lunes
+
+    def regla_programacion(
+        asignacion
+    ):
+
+        if "programacion" in asignacion:
+
+            return (
+                asignacion["programacion"]
+                != "lunes"
+            )
+
+        return True
+
+    restricciones = [
+
+        regla_dias_unicos,
+
+        regla_programacion
+    ]
+
+    solucion = algoritmo_forward_checking(
+        variables,
+        dominios,
+        restricciones
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print(
+        "\nsolución encontrada:"
+    )
 
-    print("historial de movimientos:")
-    print(recorrido)
+    print(solucion)
+
+    print("\nproceso terminado")
 
     # resumen:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - asigna valores paso a paso
     #
-    # - esto reduce ciclos repetitivos
+    # - revisa restricciones actuales
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - revisa si el futuro
+    #   sigue teniendo opciones
+    #
+    # - si una variable
+    #   se queda sin valores:
+    #   cancela ese camino
+    #
+    # - suele ser más rápido
+    #   que backtracking puro

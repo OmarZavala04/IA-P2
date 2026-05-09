@@ -1,214 +1,169 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# teoria de juegos: equilibrios y mecanismos
+# en teoria de juegos hay varios jugadores.
+# cada jugador escoge una accion/estrategia.
+# lo que ganas depende de lo que haces tu y lo que hace el otro.
+# equilibrio de nash:
+# una combinacion de estrategias donde
+# ningun jugador gana mas cambiando SOLO su propia estrategia.
 
-import heapq
+def mejor_respuesta_para_a(eleccion_b, estrategias, pagos):
+
+    # aqui guardamos todas las mejores respuestas posibles
+    # porque puede haber empate
+    mejores = []
+
+    # empezamos con utilidad muy baja
+    mejor_utilidad = float("-inf")
+
+    for opcion_a in estrategias:
+
+        utilidad_a, _ = pagos[opcion_a][eleccion_b]
+
+        # si encontramos algo mejor
+        if utilidad_a > mejor_utilidad:
+
+            mejor_utilidad = utilidad_a
+
+            # reiniciamos lista
+            mejores = [opcion_a]
+
+        # si empata con la mejor utilidad
+        elif utilidad_a == mejor_utilidad:
+
+            mejores.append(opcion_a)
+
+    return mejores
 
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+def mejor_respuesta_para_b(eleccion_a, estrategias, pagos):
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    mejores = []
 
-    if origen == destino:
-        return [origen], 0
+    mejor_utilidad = float("-inf")
 
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
-    }
+    for opcion_b in estrategias:
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+        _, utilidad_b = pagos[eleccion_a][opcion_b]
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
+        if utilidad_b > mejor_utilidad:
+
+            mejor_utilidad = utilidad_b
+
+            mejores = [opcion_b]
+
+        elif utilidad_b == mejor_utilidad:
+
+            mejores.append(opcion_b)
+
+    return mejores
+
+
+def es_equilibrio_de_nash(a_juega, b_juega, estrategias, pagos):
+
+    # mejores respuestas posibles de cada jugador
+    mejores_a = mejor_respuesta_para_a(
+        b_juega,
+        estrategias,
+        pagos
     )
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
+    mejores_b = mejor_respuesta_para_b(
+        a_juega,
+        estrategias,
+        pagos
     )
 
-    explorados = set()
-
-    while pendientes:
-
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
-        )
-
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
-
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
-
-        explorados.add(nodo_actual)
-
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
-
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
-            )
-
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
-
-                costos_reales[vecino] = nuevo_costo
-
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
-                    )
-                )
-
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
-                    )
-                )
-
-    # no fue posible llegar al destino
-    return None, None
-
-
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+    # para ser equilibrio:
+    # ambos deben estar jugando una mejor respuesta
+    return (a_juega in mejores_a) and (b_juega in mejores_b)
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
+    # estrategias posibles
+    estrategias = [
+        "cooperar",
+        "traicionar"
+    ]
 
-    grafo = {
+    # pagos[a][b] = (utilidad_a, utilidad_b)
 
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
+    pagos = {
+
+        "cooperar": {
+
+            "cooperar": (-1, -1),
+
+            "traicionar": (-10, 0)
+
         },
 
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
+        "traicionar": {
 
-        "universidad": {
-            "empresa": 4
-        },
+            "cooperar": (0, -10),
 
-        "jardin": {
-            "clinica": 2
-        },
+            "traicionar": (-5, -5)
 
-        "clinica": {
-            "empresa": 3
-        },
-
-        "empresa": {}
+        }
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
+    print("\nRESULTADOS:\n")
 
-    heuristica = {
+    # probamos todas las combinaciones posibles
+    for a_juega in estrategias:
 
-        "empresa": 0,
+        for b_juega in estrategias:
 
-        "clinica": 2,
+            util_a, util_b = pagos[a_juega][b_juega]
 
-        "universidad": 3,
+            equilibrio = es_equilibrio_de_nash(
+                a_juega,
+                b_juega,
+                estrategias,
+                pagos
+            )
 
-        "jardin": 4,
+            print(
+                "A:",
+                a_juega,
+                "| B:",
+                b_juega,
+                "| utilidad A:",
+                util_a,
+                "| utilidad B:",
+                util_b,
+                "| equilibrio de nash?:",
+                equilibrio
+            )
 
-        "mercado": 4,
+    print("\nMEJORES RESPUESTAS:\n")
 
-        "hogar": 6
-    }
+    # mostramos mejores respuestas de A
+    for accion_b in estrategias:
 
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
-    )
+        print(
+            "si B juega",
+            accion_b,
+            "-> mejores respuestas de A:",
+            mejor_respuesta_para_a(
+                accion_b,
+                estrategias,
+                pagos
+            )
+        )
 
-    print("ruta calculada con A*:")
-    print(ruta)
+    print()
 
-    print("costo total:")
-    print(costo_total)
+    # mostramos mejores respuestas de B
+    for accion_a in estrategias:
 
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
-    )
-
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
-
-    print("costo total:")
-    print(costo_total2)
-
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+        print(
+            "si A juega",
+            accion_a,
+            "-> mejores respuestas de B:",
+            mejor_respuesta_para_b(
+                accion_a,
+                estrategias,
+                pagos
+            )
+        )

@@ -1,214 +1,293 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# Iteracion de politicas
+# una politica dice que accion tomar en cada estado
 
-import heapq
+def evaluar_politica(
+    estados,
+    politica,
+    acciones_por_estado,
+    transicion,
+    recompensa,
+    descuento,
+    pasos_eval
+):
+    """
+    calcula el valor de cada estado
+    siguiendo la politica actual
+    """
+
+    # iniciar todos los valores en 0
+    valores = {}
+
+    for estado in estados:
+        valores[estado] = 0
+
+    # aproximacion iterativa
+    for _ in range(pasos_eval):
+
+        nuevos_valores = {}
+
+        for estado in estados:
+
+            accion = politica[estado]
+
+            # estado terminal
+            if accion is None:
+
+                nuevos_valores[estado] = 0
+
+            else:
+
+                siguiente_estado = transicion(
+                    estado,
+                    accion
+                )
+
+                recompensa_actual = recompensa(
+                    estado,
+                    accion
+                )
+
+                # ecuacion de bellman para politica fija
+                valor = (
+                    recompensa_actual
+                    +
+                    descuento
+                    *
+                    valores[siguiente_estado]
+                )
+
+                nuevos_valores[estado] = valor
+
+        valores = nuevos_valores
+
+    return valores
 
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+def mejorar_politica(
+    estados,
+    acciones_por_estado,
+    transicion,
+    recompensa,
+    descuento,
+    valores_actuales
+):
+    """
+    intenta mejorar la politica actual
+    escogiendo la mejor accion en cada estado
+    """
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    nueva_politica = {}
 
-    if origen == destino:
-        return [origen], 0
+    for estado in estados:
 
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
-    }
+        acciones = acciones_por_estado[estado]
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+        # estado terminal
+        if len(acciones) == 0:
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
-    )
+            nueva_politica[estado] = None
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
-    )
+        else:
 
-    explorados = set()
+            mejor_accion = None
+            mejor_score = None
 
-    while pendientes:
+            # probar todas las acciones
+            for accion in acciones:
 
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
+                siguiente_estado = transicion(
+                    estado,
+                    accion
+                )
+
+                recompensa_actual = recompensa(
+                    estado,
+                    accion
+                )
+
+                score = (
+                    recompensa_actual
+                    +
+                    descuento
+                    *
+                    valores_actuales[siguiente_estado]
+                )
+
+                if (
+                    mejor_accion is None
+                    or
+                    score > mejor_score
+                ):
+
+                    mejor_accion = accion
+                    mejor_score = score
+
+            nueva_politica[estado] = mejor_accion
+
+    return nueva_politica
+
+
+def politicas_iguales(
+    politica_1,
+    politica_2
+):
+    """
+    revisa si dos politicas son iguales
+    """
+
+    for estado in politica_1:
+
+        if politica_1[estado] != politica_2[estado]:
+            return False
+
+    return True
+
+
+def iteracion_de_politicas(
+    estados,
+    acciones_por_estado,
+    transicion,
+    recompensa,
+    descuento,
+    pasos_eval,
+    pasos_mejora
+):
+    """
+    alterna:
+    1) evaluar politica
+    2) mejorar politica
+    """
+
+    # politica inicial simple
+    politica = {}
+
+    for estado in estados:
+
+        acciones = acciones_por_estado[estado]
+
+        if len(acciones) == 0:
+
+            politica[estado] = None
+
+        else:
+
+            politica[estado] = acciones[0]
+
+    # ciclo principal
+    for _ in range(pasos_mejora):
+
+        # evaluar politica actual
+        valores = evaluar_politica(
+            estados,
+            politica,
+            acciones_por_estado,
+            transicion,
+            recompensa,
+            descuento,
+            pasos_eval
         )
 
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
+        # mejorar politica
+        nueva_politica = mejorar_politica(
+            estados,
+            acciones_por_estado,
+            transicion,
+            recompensa,
+            descuento,
+            valores
+        )
 
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
+        # si ya no cambia, terminar
+        if politicas_iguales(
+            politica,
+            nueva_politica
+        ):
 
-        explorados.add(nodo_actual)
-
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
-
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
+            return (
+                nueva_politica,
+                valores
             )
 
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
+        politica = nueva_politica
 
-                costos_reales[vecino] = nuevo_costo
-
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
-                    )
-                )
-
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
-                    )
-                )
-
-    # no fue posible llegar al destino
-    return None, None
-
-
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+    return politica, valores
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
+    # estados del problema
+    estados = [
+        "a",
+        "b",
+        "c"
+    ]
 
-    grafo = {
-
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
-        },
-
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
-
-        "universidad": {
-            "empresa": 4
-        },
-
-        "jardin": {
-            "clinica": 2
-        },
-
-        "clinica": {
-            "empresa": 3
-        },
-
-        "empresa": {}
+    # acciones posibles por estado
+    acciones_por_estado = {
+        "a": ["ir_b", "ir_c"],
+        "b": ["ir_c"],
+        "c": []
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
+    # funcion de transicion
+    def transicion(estado, accion):
 
-    heuristica = {
+        if estado == "a" and accion == "ir_b":
+            return "b"
 
-        "empresa": 0,
+        if estado == "a" and accion == "ir_c":
+            return "c"
 
-        "clinica": 2,
+        if estado == "b" and accion == "ir_c":
+            return "c"
 
-        "universidad": 3,
+        if estado == "c":
+            return "c"
 
-        "jardin": 4,
+        return estado
 
-        "mercado": 4,
+    # recompensas inmediatas
+    def recompensa(estado, accion):
 
-        "hogar": 6
-    }
+        if estado == "a" and accion == "ir_b":
+            return 5
 
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
+        if estado == "a" and accion == "ir_c":
+            return 10
+
+        if estado == "b" and accion == "ir_c":
+            return 2
+
+        return 0
+
+    descuento = 0.9
+
+    politica_final, valores_finales = iteracion_de_politicas(
+        estados,
+        acciones_por_estado,
+        transicion,
+        recompensa,
+        descuento,
+        pasos_eval=10,
+        pasos_mejora=10
     )
 
-    print("ruta calculada con A*:")
-    print(ruta)
+    print("politica final:")
 
-    print("costo total:")
-    print(costo_total)
+    for estado in estados:
 
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
-    )
+        print(
+            estado,
+            "->",
+            politica_final[estado]
+        )
 
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
+    print("\nvalores finales:")
 
-    print("costo total:")
-    print(costo_total2)
+    for estado in estados:
 
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+        print(
+            estado,
+            "->",
+            valores_finales[estado]
+        )

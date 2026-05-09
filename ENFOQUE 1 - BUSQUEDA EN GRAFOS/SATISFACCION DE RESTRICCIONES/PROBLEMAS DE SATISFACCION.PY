@@ -1,217 +1,255 @@
-# búsqueda tabú
+# problemas de satisfacción
+# de restricciones
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# también llamados:
+# CSP
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# un CSP tiene:
 #
-# para evitarlo se usa
-# una lista tabú
+# - variables
+# - dominios
+# - restricciones
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# variables:
+# cosas que debo decidir
+#
+# dominios:
+# valores posibles
+# para cada variable
+#
+# restricciones:
+# reglas que deben cumplirse
+#
+# ejemplos reales:
+#
+# - horarios
+# - sudoku
+# - asignación de salones
+# - coloreo de mapas
+# - distribución de tareas
+#
+# ejemplo:
+# organizar exámenes
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def validar_restricciones(
+    asignacion,
+    restricciones
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    asignacion:
+        decisiones actuales
 
-    mejor_candidato = None
+    restricciones:
+        reglas del problema
 
-    mejor_puntaje = None
+    retorna:
+        True si todo es válido
+        False si existe conflicto
+    """
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
+    for regla in restricciones:
+
+        if not regla(asignacion):
+
+            return False
+
+    return True
+
+
+def resolver_csp(
+    variables,
+    dominios,
+    restricciones,
+    asignacion_actual=None
+):
+
+    """
+    variables:
+        variables del problema
+
+    dominios:
+        valores posibles
+
+    restricciones:
+        reglas que deben cumplirse
+
+    asignacion_actual:
+        decisiones tomadas
+        hasta el momento
+
+    retorna:
+        solución válida
+        o None
+    """
+
+    if asignacion_actual is None:
+
+        asignacion_actual = {}
+
+    # verificar solución completa
+    if (
+        len(asignacion_actual)
+        == len(variables)
     ):
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
+        return asignacion_actual
 
-        puntaje = funcion_valor(vecino)
+    # buscar variable pendiente
+    for variable in variables:
 
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
-        ):
+        if variable not in asignacion_actual:
 
-            mejor_candidato = vecino
+            pendiente = variable
 
-            mejor_puntaje = puntaje
-
-    return mejor_candidato
-
-
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
-):
-
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
-
-    actual = inicio
-
-    # mejor estado encontrado
-    mejor_global = actual
-
-    historial = [actual]
-
-    # estructuras de memoria tabú
-    tabu = {actual}
-
-    cola_tabu = [actual]
-
-    for _ in range(iteraciones_maximas):
-
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
-        )
-
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
             break
 
-        # avanzar al siguiente estado
-        actual = siguiente
+    # probar valores posibles
+    for valor in dominios[pendiente]:
 
-        historial.append(actual)
+        nueva_asignacion = (
+            asignacion_actual.copy()
+        )
 
-        # agregar a lista tabú
-        tabu.add(actual)
+        nueva_asignacion[pendiente] = valor
 
-        cola_tabu.append(actual)
-
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
-
-            estado_viejo = cola_tabu.pop(0)
-
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
-
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
+        # validar restricciones
+        if validar_restricciones(
+            nueva_asignacion,
+            restricciones
         ):
 
-            mejor_global = actual
+            resultado = resolver_csp(
+                variables,
+                dominios,
+                restricciones,
+                nueva_asignacion
+            )
 
-    return mejor_global, historial
+            if resultado is not None:
+
+                return resultado
+
+    # si ningún valor funciona
+    return None
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # variables:
+    # materias
 
-    conexiones = {
+    variables = [
 
-        3: [4, 5, 6],
+        "mate",
 
-        4: [5, 6],
+        "fisica",
 
-        5: [4, 6, 7],
+        "programacion"
+    ]
 
-        6: [5, 7, 8],
+    # dominios:
+    # días posibles
 
-        7: [6, 8, 9],
+    dominios = {
 
-        8: [7, 9],
+        "mate": [
+            "lunes",
+            "miercoles"
+        ],
 
-        9: [8]
+        "fisica": [
+            "lunes",
+            "miercoles"
+        ],
+
+        "programacion": [
+            "lunes",
+            "miercoles"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # restricción:
+    # no repetir día
 
-    def funcion_valor(x):
-        return x
+    def regla_dias_distintos(
+        asignacion
+    ):
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        dias = []
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        for materia in asignacion:
+
+            dias.append(
+                asignacion[materia]
+            )
+
+        return (
+            len(dias)
+            == len(set(dias))
+        )
+
+    # restricción:
+    # programación no puede ser lunes
+
+    def regla_programacion(
+        asignacion
+    ):
+
+        if "programacion" in asignacion:
+
+            return (
+                asignacion["programacion"]
+                != "lunes"
+            )
+
+        return True
+
+    restricciones = [
+
+        regla_dias_distintos,
+
+        regla_programacion
+    ]
+
+    solucion = resolver_csp(
+        variables,
+        dominios,
+        restricciones
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print("horario encontrado:")
 
-    print("historial de movimientos:")
-    print(recorrido)
+    print(solucion)
 
+    # ejemplo posible:
+    #
+    # {
+    #   "mate": "lunes",
+    #   "fisica": "miercoles",
+    #   "programacion": "viernes"
+    # }
+    #
+    # explicación:
+    #
+    # - cada variable recibe un valor
+    #
+    # - el algoritmo prueba opciones
+    #
+    # - si una regla falla:
+    #   intenta otra combinación
+    #
     # resumen:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - variables:
+    #   lo que debo decidir
     #
-    # - esto reduce ciclos repetitivos
+    # - dominios:
+    #   opciones posibles
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - restricciones:
+    #   reglas obligatorias
+    #
+    # - el algoritmo busca
+    #   una combinación válida

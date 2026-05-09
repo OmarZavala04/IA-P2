@@ -1,217 +1,366 @@
-# búsqueda tabú
+# acondicionamiento del corte
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# esta técnica se utiliza
+# en problemas con restricciones
+# muy conectadas entre sí
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# algunas variables generan
+# más conflictos que otras
 #
-# para evitarlo se usa
-# una lista tabú
+# idea principal:
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# 1. elegir variables problemáticas
+# 2. fijar primero sus valores
+# 3. resolver el resto normalmente
+#
+# esto divide el problema grande
+# en subproblemas más simples
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def validar_asignacion(
+    asignacion,
+    restricciones
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    asignacion:
+        valores actuales asignados
 
-    mejor_candidato = None
+    restricciones:
+        lista de reglas
 
-    mejor_puntaje = None
+    retorna:
+        True si todo es válido
+        False si existe conflicto
+    """
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
+    for regla in restricciones:
+
+        if not regla(asignacion):
+            return False
+
+    return True
+
+
+def backtracking_basico(
+    variables,
+    dominios,
+    restricciones,
+    asignacion_actual=None
+):
+
+    """
+    variables:
+        variables pendientes
+
+    dominios:
+        valores posibles
+
+    restricciones:
+        reglas del problema
+
+    asignacion_actual:
+        asignaciones realizadas
+
+    retorna:
+        solución válida
+        o None
+    """
+
+    if asignacion_actual is None:
+        asignacion_actual = {}
+
+    # verificar solución completa
+    if (
+        len(asignacion_actual)
+        == len(variables)
     ):
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
-
-        puntaje = funcion_valor(vecino)
-
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
+        if validar_asignacion(
+            asignacion_actual,
+            restricciones
         ):
 
-            mejor_candidato = vecino
+            return asignacion_actual.copy()
 
-            mejor_puntaje = puntaje
+        return None
 
-    return mejor_candidato
+    # seleccionar variable pendiente
+    for variable in variables:
 
+        if variable not in asignacion_actual:
 
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
-):
+            pendiente = variable
 
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
-
-    actual = inicio
-
-    # mejor estado encontrado
-    mejor_global = actual
-
-    historial = [actual]
-
-    # estructuras de memoria tabú
-    tabu = {actual}
-
-    cola_tabu = [actual]
-
-    for _ in range(iteraciones_maximas):
-
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
-        )
-
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
             break
 
-        # avanzar al siguiente estado
-        actual = siguiente
+    # probar valores posibles
+    for valor in dominios[pendiente]:
 
-        historial.append(actual)
+        nueva_asignacion = (
+            asignacion_actual.copy()
+        )
 
-        # agregar a lista tabú
-        tabu.add(actual)
+        nueva_asignacion[pendiente] = valor
 
-        cola_tabu.append(actual)
-
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
-
-            estado_viejo = cola_tabu.pop(0)
-
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
-
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
+        # validar parcialmente
+        if validar_asignacion(
+            nueva_asignacion,
+            restricciones
         ):
 
-            mejor_global = actual
+            resultado = backtracking_basico(
+                variables,
+                dominios,
+                restricciones,
+                nueva_asignacion
+            )
 
-    return mejor_global, historial
+            if resultado is not None:
+                return resultado
+
+    return None
+
+
+def generar_combinaciones_cutset(
+    variables_cutset,
+    dominios,
+    restricciones,
+    base=None
+):
+
+    """
+    variables_cutset:
+        variables críticas
+
+    dominios:
+        valores posibles
+
+    restricciones:
+        reglas del problema
+
+    base:
+        asignación parcial
+
+    retorna:
+        lista de combinaciones válidas
+    """
+
+    if base is None:
+        base = {}
+
+    # si todas las variables
+    # del cutset ya fueron asignadas
+    if (
+        len(base)
+        == len(variables_cutset)
+    ):
+
+        if validar_asignacion(
+            base,
+            restricciones
+        ):
+
+            return [base.copy()]
+
+        return []
+
+    indice = len(base)
+
+    variable_actual = (
+        variables_cutset[indice]
+    )
+
+    resultados = []
+
+    for valor in dominios[variable_actual]:
+
+        nueva = base.copy()
+
+        nueva[variable_actual] = valor
+
+        # validar combinación parcial
+        if validar_asignacion(
+            nueva,
+            restricciones
+        ):
+
+            siguientes = generar_combinaciones_cutset(
+                variables_cutset,
+                dominios,
+                restricciones,
+                nueva
+            )
+
+            resultados.extend(siguientes)
+
+    return resultados
+
+
+def condicionamiento_cutset(
+    variables,
+    dominios,
+    restricciones,
+    variables_cutset
+):
+
+    """
+    variables:
+        todas las variables
+
+    dominios:
+        valores permitidos
+
+    restricciones:
+        reglas del problema
+
+    variables_cutset:
+        variables conflictivas
+        que se fijan primero
+
+    retorna:
+        solución válida
+        o None
+    """
+
+    # generar opciones válidas
+    # para las variables críticas
+    opciones_cutset = (
+        generar_combinaciones_cutset(
+            variables_cutset,
+            dominios,
+            restricciones
+        )
+    )
+
+    # resolver el resto
+    for asignacion_cutset in opciones_cutset:
+
+        restantes = [
+
+            v
+            for v in variables
+
+            if v not in asignacion_cutset
+        ]
+
+        solucion = backtracking_basico(
+            restantes,
+            dominios,
+            restricciones,
+            asignacion_cutset.copy()
+        )
+
+        if solucion is not None:
+            return solucion
+
+    return None
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
+    # variables del problema
     #
-    # números mayores
-    # representan mejores soluciones
+    # ejemplo:
+    # materias de exámenes
 
-    conexiones = {
+    variables = [
+        "mate",
+        "fisica",
+        "programacion"
+    ]
 
-        3: [4, 5, 6],
+    # dominios posibles
+    #
+    # días disponibles
 
-        4: [5, 6],
+    dominios = {
 
-        5: [4, 6, 7],
+        "mate": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        6: [5, 7, 8],
+        "fisica": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        7: [6, 8, 9],
-
-        8: [7, 9],
-
-        9: [8]
+        "programacion": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # restricción:
+    # no repetir día
 
-    def funcion_valor(x):
-        return x
+    def regla_dias_distintos(
+        asignacion
+    ):
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        dias = list(
+            asignacion.values()
+        )
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        return (
+            len(dias)
+            == len(set(dias))
+        )
+
+    # restricción:
+    # programación no puede ser lunes
+
+    def regla_programacion(
+        asignacion
+    ):
+
+        if "programacion" in asignacion:
+
+            return (
+                asignacion["programacion"]
+                != "lunes"
+            )
+
+        return True
+
+    restricciones = [
+
+        regla_dias_distintos,
+
+        regla_programacion
+    ]
+
+    # variables críticas
+    #
+    # se resolverán primero
+
+    variables_cutset = [
+        "mate"
+    ]
+
+    solucion = condicionamiento_cutset(
+        variables=variables,
+        dominios=dominios,
+        restricciones=restricciones,
+        variables_cutset=variables_cutset
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
-
-    print("historial de movimientos:")
-    print(recorrido)
+    print("solución encontrada:")
+    print(solucion)
 
     # resumen:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - las variables del cutset
+    #   se asignan primero
     #
-    # - esto reduce ciclos repetitivos
+    # - después se resuelve
+    #   el resto del problema
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - esto divide el problema
+    #   en partes más simples
+    #
+    # - útil en CSP complejos

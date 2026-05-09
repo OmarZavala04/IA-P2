@@ -1,214 +1,164 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# Red bayesiana dinamica
+# una dbn modela como cambia algo conforme pasa el tiempo.
+# en este ejemplo modelaremos el estado de una bateria de dron.
+# estado_hoy -> estado_manana
 
-import heapq
+# estados posibles:
+# - "alta"
+# - "media"
+# - "baja"
+
+# idea:
+# 1. tengo una creencia del estado actual de la bateria
+# 2. tengo probabilidades de como cambia al siguiente ciclo
+# 3. calculo la probabilidad del estado futuro
 
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+def calcular_estado_siguiente(creencia_actual, modelo_transicion):
+    """
+    calcula la creencia del siguiente instante
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    creencia_actual:
+        probabilidad actual de cada estado
 
-    if origen == destino:
-        return [origen], 0
-
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
+    ejemplo:
+    {
+        "alta": 0.5,
+        "media": 0.3,
+        "baja": 0.2
     }
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+    modelo_transicion:
+        probabilidades de pasar de un estado a otro
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
-    )
+    ejemplo:
+    {
+        "alta": {
+            "alta": 0.6,
+            "media": 0.3,
+            "baja": 0.1
+        },
+        ...
+    }
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
-    )
+    regresa:
+        nueva distribucion de probabilidades
+    """
 
-    explorados = set()
+    nueva_creencia = {}
 
-    while pendientes:
+    # para cada estado futuro posible
+    for estado_futuro in creencia_actual:
 
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
-        )
+        prob_total = 0
 
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
+        # sumamos contribucion de cada estado actual
+        for estado_actual in creencia_actual:
 
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
+            prob_actual = creencia_actual[estado_actual]
 
-        explorados.add(nodo_actual)
+            prob_cambio = modelo_transicion[
+                estado_actual
+            ][
+                estado_futuro
+            ]
 
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
-
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
+            prob_total += (
+                prob_actual *
+                prob_cambio
             )
 
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
+        nueva_creencia[estado_futuro] = prob_total
 
-                costos_reales[vecino] = nuevo_costo
-
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
-                    )
-                )
-
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
-                    )
-                )
-
-    # no fue posible llegar al destino
-    return None, None
+    return nueva_creencia
 
 
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+def imprimir_creencia(titulo, creencia):
+    """
+    imprime una creencia de forma mas clara
+    """
+
+    print("\n" + titulo)
+
+    for estado in creencia:
+
+        porcentaje = creencia[estado] * 100
+
+        print(
+            " ",
+            estado,
+            "->",
+            round(porcentaje, 2),
+            "%"
+        )
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
-
-    grafo = {
-
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
-        },
-
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
-
-        "universidad": {
-            "empresa": 4
-        },
-
-        "jardin": {
-            "clinica": 2
-        },
-
-        "clinica": {
-            "empresa": 3
-        },
-
-        "empresa": {}
+    # creencia inicial:
+    # el dron probablemente tiene bateria alta
+    creencia_hoy = {
+        "alta": 0.5,
+        "media": 0.3,
+        "baja": 0.2
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
+    # modelo de transicion
+    # ejemplo:
+    # si la bateria esta alta:
+    # 60% sigue alta
+    # 30% baja a media
+    # 10% baja mucho
 
-    heuristica = {
+    modelo_transicion = {
 
-        "empresa": 0,
+        "alta": {
+            "alta": 0.6,
+            "media": 0.3,
+            "baja": 0.1
+        },
 
-        "clinica": 2,
+        "media": {
+            "alta": 0.1,
+            "media": 0.6,
+            "baja": 0.3
+        },
 
-        "universidad": 3,
-
-        "jardin": 4,
-
-        "mercado": 4,
-
-        "hogar": 6
+        "baja": {
+            "alta": 0.0,
+            "media": 0.2,
+            "baja": 0.8
+        }
     }
 
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
+    imprimir_creencia(
+        "estado estimado de la bateria hoy:",
+        creencia_hoy
     )
 
-    print("ruta calculada con A*:")
-    print(ruta)
-
-    print("costo total:")
-    print(costo_total)
-
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
+    # calculamos siguiente estado
+    creencia_manana = calcular_estado_siguiente(
+        creencia_hoy,
+        modelo_transicion
     )
 
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
+    imprimir_creencia(
+        "estado estimado de la bateria despues:",
+        creencia_manana
+    )
 
-    print("costo total:")
-    print(costo_total2)
+    # simulamos otro paso mas
+    creencia_despues = calcular_estado_siguiente(
+        creencia_manana,
+        modelo_transicion
+    )
 
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+    imprimir_creencia(
+        "estado estimado despues de otro ciclo:",
+        creencia_despues
+    )
+
+    # - una dbn conecta estados entre tiempos diferentes
+    # - usa probabilidades de transicion
+    # - sirve para predecir estados futuros
+    # - aqui se uso para estimar el desgaste de bateria

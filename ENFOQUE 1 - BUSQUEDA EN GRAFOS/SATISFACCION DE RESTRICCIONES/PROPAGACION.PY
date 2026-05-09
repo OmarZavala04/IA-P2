@@ -1,217 +1,292 @@
-# búsqueda tabú
+# propagación de restricciones
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# esta técnica intenta
+# eliminar valores imposibles
+# antes de realizar
+# toda la búsqueda
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# idea principal:
 #
-# para evitarlo se usa
-# una lista tabú
+# si un valor ya no puede
+# cumplir restricciones
+# se elimina del dominio
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# esto reduce:
+#
+# - prueba y error
+# - combinaciones inútiles
+# - tiempo de búsqueda
+#
+# en este ejemplo
+# usamos una versión
+# del algoritmo AC-3
+#
+# AC-3:
+# consistencia de arcos
+#
+# revisa pares de variables
+# y elimina valores incompatibles
+
+from collections import deque
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def son_compatibles(
+    variable_x,
+    valor_x,
+    variable_y,
+    dominio_y,
+    restriccion_binaria
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    verifica si un valor de X
+    puede combinarse
+    con al menos un valor de Y
+    """
 
-    mejor_candidato = None
+    for valor_y in dominio_y:
 
-    mejor_puntaje = None
-
-    for vecino in conexiones.get(
-        estado_actual,
-        []
-    ):
-
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
-
-        puntaje = funcion_valor(vecino)
-
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
+        if restriccion_binaria(
+            variable_x,
+            valor_x,
+            variable_y,
+            valor_y
         ):
 
-            mejor_candidato = vecino
+            return True
 
-            mejor_puntaje = puntaje
-
-    return mejor_candidato
+    return False
 
 
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
+def revisar_arco(
+    variable_x,
+    variable_y,
+    dominios,
+    restriccion_binaria
 ):
 
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
+    """
+    limpia el dominio de X
+    usando información de Y
 
-    actual = inicio
+    retorna:
+        True si hubo cambios
+        False si no cambió nada
+    """
 
-    # mejor estado encontrado
-    mejor_global = actual
+    dominio_x = dominios[variable_x]
 
-    historial = [actual]
+    dominio_y = dominios[variable_y]
 
-    # estructuras de memoria tabú
-    tabu = {actual}
+    eliminar = []
 
-    cola_tabu = [actual]
+    for valor_x in dominio_x:
 
-    for _ in range(iteraciones_maximas):
-
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
+        compatible = son_compatibles(
+            variable_x,
+            valor_x,
+            variable_y,
+            dominio_y,
+            restriccion_binaria
         )
 
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
-            break
+        if not compatible:
 
-        # avanzar al siguiente estado
-        actual = siguiente
+            eliminar.append(valor_x)
 
-        historial.append(actual)
+    # eliminar valores inválidos
+    if eliminar:
 
-        # agregar a lista tabú
-        tabu.add(actual)
+        for valor in eliminar:
 
-        cola_tabu.append(actual)
+            dominio_x.remove(valor)
 
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
+        return True
 
-            estado_viejo = cola_tabu.pop(0)
+    return False
 
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
 
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
-        ):
+def algoritmo_ac3(
+    variables,
+    dominios,
+    vecinos,
+    restriccion_binaria
+):
 
-            mejor_global = actual
+    """
+    variables:
+        variables del problema
 
-    return mejor_global, historial
+    dominios:
+        valores posibles
+
+    vecinos:
+        variables conectadas
+
+    restriccion_binaria:
+        regla entre pares
+        de variables
+
+    retorna:
+        True si es consistente
+        False si algún dominio
+        queda vacío
+    """
+
+    cola = deque()
+
+    # agregar todos los arcos
+    for x in variables:
+
+        for y in vecinos[x]:
+
+            cola.append((x, y))
+
+    # procesar cola
+    while cola:
+
+        x, y = cola.popleft()
+
+        cambio = revisar_arco(
+            x,
+            y,
+            dominios,
+            restriccion_binaria
+        )
+
+        # si hubo cambios
+        if cambio:
+
+            # dominio vacío
+            # significa imposible
+            if len(dominios[x]) == 0:
+
+                return False
+
+            # volver a revisar vecinos
+            for z in vecinos[x]:
+
+                if z != y:
+
+                    cola.append((z, x))
+
+    return True
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # ejemplo:
+    # coloreo de mapas
 
-    conexiones = {
+    variables = [
 
-        3: [4, 5, 6],
+        "a",
 
-        4: [5, 6],
+        "b",
 
-        5: [4, 6, 7],
+        "c"
+    ]
 
-        6: [5, 7, 8],
+    dominios = {
 
-        7: [6, 8, 9],
+        "a": [
+            "rojo",
+            "verde"
+        ],
 
-        8: [7, 9],
+        "b": [
+            "rojo",
+            "verde"
+        ],
 
-        9: [8]
+        "c": [
+            "rojo",
+            "verde"
+        ]
     }
 
-    # función de evaluación
+    # conexiones:
     #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # a conectado con b
+    # b conectado con a y c
+    # c conectado con b
 
-    def funcion_valor(x):
-        return x
+    vecinos = {
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        "a": ["b"],
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        "b": [
+            "a",
+            "c"
+        ],
+
+        "c": ["b"]
+    }
+
+    # regla:
+    # vecinos no pueden
+    # compartir color
+
+    def restriccion_binaria(
+        x,
+        valor_x,
+        y,
+        valor_y
+    ):
+
+        if (
+            (x == "a" and y == "b")
+            or
+            (x == "b" and y == "a")
+        ):
+
+            return valor_x != valor_y
+
+        if (
+            (x == "b" and y == "c")
+            or
+            (x == "c" and y == "b")
+        ):
+
+            return valor_x != valor_y
+
+        return True
+
+    consistente = algoritmo_ac3(
+        variables,
+        dominios,
+        vecinos,
+        restriccion_binaria
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print("¿es consistente?:")
+    print(consistente)
 
-    print("historial de movimientos:")
-    print(recorrido)
+    print("\ndominios finales:")
 
-    # resumen:
+    for variable in variables:
+
+        print(
+            variable,
+            "->",
+            dominios[variable]
+        )
+
+    # explicación:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - AC-3 revisa pares
+    #   de variables
     #
-    # - esto reduce ciclos repetitivos
+    # - elimina valores
+    #   incompatibles
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - si un dominio queda vacío:
+    #   no existe solución
+    #
+    # ventaja:
+    #
+    # reduce combinaciones
+    # antes de buscar
+    #
+    # esto hace más eficiente
+    # el problema CSP

@@ -1,217 +1,344 @@
-# búsqueda tabú
+# búsqueda local:
+# mínimos conflictos
 #
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
+# este algoritmo comienza
+# con una asignación cualquiera
+# aunque tenga errores
 #
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
+# después intenta corregir
+# únicamente las variables
+# que causan conflictos
 #
-# para evitarlo se usa
-# una lista tabú
+# idea principal:
 #
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# - detectar problemas
+# - modificar solo lo necesario
+# - escoger el valor
+#   que genere menos conflictos
+#
+# ventaja:
+# funciona rápido
+# en problemas grandes
+#
+# ejemplos:
+#
+# - horarios
+# - sudoku
+# - coloreo de mapas
+# - asignación de tareas
+
+import random
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
+def calcular_conflictos(
+    asignacion,
+    restricciones
 ):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    """
+    asignacion:
+        valores actuales
 
-    mejor_candidato = None
+    restricciones:
+        reglas del problema
 
-    mejor_puntaje = None
+    retorna:
+        número de conflictos
+    """
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
-    ):
+    conflictos = 0
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
+    for regla in restricciones:
 
-        puntaje = funcion_valor(vecino)
+        if not regla(asignacion):
 
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
-        ):
+            conflictos += 1
 
-            mejor_candidato = vecino
-
-            mejor_puntaje = puntaje
-
-    return mejor_candidato
+    return conflictos
 
 
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
+def variables_conflictivas(
+    asignacion,
+    restricciones
 ):
 
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
+    """
+    detecta variables
+    relacionadas con conflictos
 
-    actual = inicio
+    retorna:
+        lista de variables problemáticas
+    """
 
-    # mejor estado encontrado
-    mejor_global = actual
+    problematicas = set()
 
-    historial = [actual]
+    for regla in restricciones:
 
-    # estructuras de memoria tabú
-    tabu = {actual}
+        if not regla(asignacion):
 
-    cola_tabu = [actual]
+            for variable in asignacion:
 
-    for _ in range(iteraciones_maximas):
+                problematicas.add(variable)
 
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
+    return list(problematicas)
+
+
+def mejor_valor(
+    variable,
+    asignacion,
+    dominios,
+    restricciones
+):
+
+    """
+    busca el valor
+    que produzca menos conflictos
+    """
+
+    mejor_opcion = None
+
+    menor_conflicto = None
+
+    for valor in dominios[variable]:
+
+        prueba = asignacion.copy()
+
+        prueba[variable] = valor
+
+        conflictos = calcular_conflictos(
+            prueba,
+            restricciones
         )
 
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
-            break
-
-        # avanzar al siguiente estado
-        actual = siguiente
-
-        historial.append(actual)
-
-        # agregar a lista tabú
-        tabu.add(actual)
-
-        cola_tabu.append(actual)
-
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
-
-            estado_viejo = cola_tabu.pop(0)
-
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
-
-        # actualizar mejor solución global
         if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
+            mejor_opcion is None
+            or conflictos < menor_conflicto
         ):
 
-            mejor_global = actual
+            mejor_opcion = valor
 
-    return mejor_global, historial
+            menor_conflicto = conflictos
+
+    return mejor_opcion
+
+
+def algoritmo_minimos_conflictos(
+    variables,
+    dominios,
+    restricciones,
+    max_intentos,
+    max_pasos
+):
+
+    """
+    variables:
+        variables del problema
+
+    dominios:
+        valores posibles
+
+    restricciones:
+        reglas que deben cumplirse
+
+    max_intentos:
+        reinicios máximos
+
+    max_pasos:
+        correcciones máximas
+        por intento
+
+    retorna:
+        solución válida
+        e historial
+    """
+
+    historial = []
+
+    # varios intentos
+    for _ in range(max_intentos):
+
+        # crear asignación aleatoria
+        asignacion = {}
+
+        for variable in variables:
+
+            asignacion[variable] = (
+                random.choice(
+                    dominios[variable]
+                )
+            )
+
+        historial.append(
+            asignacion.copy()
+        )
+
+        # intentar corregir conflictos
+        for _ in range(max_pasos):
+
+            # verificar solución
+            if (
+                calcular_conflictos(
+                    asignacion,
+                    restricciones
+                ) == 0
+            ):
+
+                return (
+                    asignacion,
+                    historial
+                )
+
+            # detectar variables conflictivas
+            conflictivas = variables_conflictivas(
+                asignacion,
+                restricciones
+            )
+
+            if not conflictivas:
+
+                return (
+                    asignacion,
+                    historial
+                )
+
+            # escoger una variable problemática
+            variable = random.choice(
+                conflictivas
+            )
+
+            # buscar mejor valor
+            nuevo_valor = mejor_valor(
+                variable,
+                asignacion,
+                dominios,
+                restricciones
+            )
+
+            # aplicar corrección
+            asignacion[variable] = nuevo_valor
+
+            historial.append(
+                asignacion.copy()
+            )
+
+        # si falla:
+        # reinicia automáticamente
+        # con otra asignación aleatoria
+
+    return None, historial
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # ejemplo:
+    # horarios de exámenes
 
-    conexiones = {
+    variables = [
 
-        3: [4, 5, 6],
+        "mate",
 
-        4: [5, 6],
+        "fisica",
 
-        5: [4, 6, 7],
+        "programacion"
+    ]
 
-        6: [5, 7, 8],
+    dominios = {
 
-        7: [6, 8, 9],
+        "mate": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        8: [7, 9],
+        "fisica": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        9: [8]
+        "programacion": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
+    # restricción:
+    # no repetir días
 
-    def funcion_valor(x):
-        return x
+    def regla_dias_diferentes(
+        asignacion
+    ):
 
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
+        dias = list(
+            asignacion.values()
+        )
 
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+        return (
+            len(dias)
+            == len(set(dias))
+        )
+
+    # restricción:
+    # programación no puede ser lunes
+
+    def regla_programacion(
+        asignacion
+    ):
+
+        if "programacion" in asignacion:
+
+            return (
+                asignacion["programacion"]
+                != "lunes"
+            )
+
+        return True
+
+    restricciones = [
+
+        regla_dias_diferentes,
+
+        regla_programacion
+    ]
+
+    solucion, historial = (
+        algoritmo_minimos_conflictos(
+            variables=variables,
+            dominios=dominios,
+            restricciones=restricciones,
+            max_intentos=10,
+            max_pasos=20
+        )
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print("solución encontrada:")
+    print(solucion)
 
-    print("historial de movimientos:")
-    print(recorrido)
+    print("\nhistorial de cambios:")
+
+    for paso, estado in enumerate(historial):
+
+        print(
+            "paso",
+            paso,
+            "->",
+            estado
+        )
 
     # resumen:
     #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
+    # - inicia con algo aleatorio
     #
-    # - esto reduce ciclos repetitivos
+    # - detecta conflictos
     #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    # - modifica solo variables problemáticas
+    #
+    # - escoge el valor
+    #   que reduzca conflictos
+    #
+    # - si no funciona:
+    #   reinicia desde cero
+    #
+    # - es búsqueda local
+    #   no usa recursión

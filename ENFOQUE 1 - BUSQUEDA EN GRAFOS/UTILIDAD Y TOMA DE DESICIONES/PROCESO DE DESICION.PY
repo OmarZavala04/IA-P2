@@ -1,214 +1,288 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# Mdp proceso de decision de markov
+# un mdp describe una decision por pasos:
+# - tengo un estado actual
+# - elijo una accion
+# - recibo una recompensa
+# - paso a un nuevo estado (con cierta probabilidad)
+# meta:
+# elegir una politica (que accion tomar en cada estado)
+# para maximizar la recompensa total esperada a largo plazo.
 
-import heapq
+def iteracion_de_valores_mdp(
+    estados,
+    acciones_por_estado,
+    transicion_prob,
+    recompensa,
+    descuento,
+    pasos_max
+):
+    """
+    iteracion de valores para mdp con transiciones probabilisticas
+    """
 
+    # valores iniciales
+    valores = {}
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+    for estado in estados:
+        valores[estado] = 0
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    # repetimos actualizacion
+    for paso in range(pasos_max):
 
-    if origen == destino:
-        return [origen], 0
+        nuevos_valores = {}
 
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
-    }
+        print("\npaso de iteracion:", paso + 1)
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+        for estado in estados:
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
-    )
+            acciones = acciones_por_estado[estado]
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
-    )
+            # estado terminal
+            if len(acciones) == 0:
 
-    explorados = set()
+                nuevos_valores[estado] = 0
 
-    while pendientes:
-
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
-        )
-
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
-
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
-
-        explorados.add(nodo_actual)
-
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
-
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
-            )
-
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
-
-                costos_reales[vecino] = nuevo_costo
-
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
-                    )
+                print(
+                    " estado",
+                    estado,
+                    "es terminal -> valor = 0"
                 )
 
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
+            else:
+
+                mejor_valor = None
+
+                # probamos cada accion
+                for accion in acciones:
+
+                    recompensa_inmediata = recompensa(
+                        estado,
+                        accion
                     )
+
+                    valor_futuro = 0
+
+                    # suma(probabilidad * valor_estado_siguiente)
+                    for siguiente_estado, probabilidad in transicion_prob(
+                        estado,
+                        accion
+                    ):
+
+                        valor_futuro += (
+                            probabilidad *
+                            valores[siguiente_estado]
+                        )
+
+                    # q-valor esperado
+                    q_valor = (
+                        recompensa_inmediata +
+                        descuento * valor_futuro
+                    )
+
+                    print(
+                        " estado:",
+                        estado,
+                        "| accion:",
+                        accion,
+                        "| q:",
+                        q_valor
+                    )
+
+                    # guardamos mejor accion
+                    if (
+                        mejor_valor is None or
+                        q_valor > mejor_valor
+                    ):
+                        mejor_valor = q_valor
+
+                nuevos_valores[estado] = mejor_valor
+
+        valores = nuevos_valores
+
+        print(" valores actuales:", valores)
+
+    return valores
+
+
+def politica_optima_mdp(
+    estados,
+    acciones_por_estado,
+    transicion_prob,
+    recompensa,
+    descuento,
+    valores
+):
+    """
+    calcula la mejor accion para cada estado
+    """
+
+    politica = {}
+
+    for estado in estados:
+
+        acciones = acciones_por_estado[estado]
+
+        # estado terminal
+        if len(acciones) == 0:
+
+            politica[estado] = None
+
+        else:
+
+            mejor_accion = None
+            mejor_q = None
+
+            # evaluamos acciones
+            for accion in acciones:
+
+                recompensa_inmediata = recompensa(
+                    estado,
+                    accion
                 )
 
-    # no fue posible llegar al destino
-    return None, None
+                valor_futuro = 0
 
+                for siguiente_estado, probabilidad in transicion_prob(
+                    estado,
+                    accion
+                ):
 
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+                    valor_futuro += (
+                        probabilidad *
+                        valores[siguiente_estado]
+                    )
+
+                q_valor = (
+                    recompensa_inmediata +
+                    descuento * valor_futuro
+                )
+
+                print(
+                    "politica -> estado:",
+                    estado,
+                    "| accion:",
+                    accion,
+                    "| q:",
+                    q_valor
+                )
+
+                if (
+                    mejor_accion is None or
+                    q_valor > mejor_q
+                ):
+                    mejor_accion = accion
+                    mejor_q = q_valor
+
+            politica[estado] = mejor_accion
+
+    return politica
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
+    # estados posibles
+    estados = ["a", "b", "c"]
 
-    grafo = {
-
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
-        },
-
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
-
-        "universidad": {
-            "empresa": 4
-        },
-
-        "jardin": {
-            "clinica": 2
-        },
-
-        "clinica": {
-            "empresa": 3
-        },
-
-        "empresa": {}
+    # acciones posibles en cada estado
+    acciones_por_estado = {
+        "a": ["ir_b", "ir_c"],
+        "b": ["ir_c"],
+        "c": []
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
+    # transiciones probabilisticas
+    def transicion_prob(estado, accion):
 
-    heuristica = {
+        # desde a a b
+        if estado == "a" and accion == "ir_b":
 
-        "empresa": 0,
+            # 80% llego a b
+            # 20% fallo y termino en c
+            return [
+                ("b", 0.8),
+                ("c", 0.2)
+            ]
 
-        "clinica": 2,
+        # desde a directo a c
+        if estado == "a" and accion == "ir_c":
 
-        "universidad": 3,
+            return [
+                ("c", 1.0)
+            ]
 
-        "jardin": 4,
+        # desde b a c
+        if estado == "b" and accion == "ir_c":
 
-        "mercado": 4,
+            return [
+                ("c", 1.0)
+            ]
 
-        "hogar": 6
-    }
+        # estado terminal
+        if estado == "c":
 
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
+            return [
+                ("c", 1.0)
+            ]
+
+        # fallback
+        return [
+            (estado, 1.0)
+        ]
+
+    # recompensas inmediatas
+    def recompensa(estado, accion):
+
+        if estado == "a" and accion == "ir_b":
+            return 5
+
+        if estado == "a" and accion == "ir_c":
+            return 10
+
+        if estado == "b" and accion == "ir_c":
+            return 2
+
+        return 0
+
+    # descuento del futuro
+    descuento = 0.9
+
+    # calculamos valores
+    valores = iteracion_de_valores_mdp(
+        estados,
+        acciones_por_estado,
+        transicion_prob,
+        recompensa,
+        descuento,
+        pasos_max=10
     )
 
-    print("ruta calculada con A*:")
-    print(ruta)
+    print("\nvalores finales:")
+    for estado in estados:
+        print(
+            estado,
+            "->",
+            valores[estado]
+        )
 
-    print("costo total:")
-    print(costo_total)
-
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
+    # calculamos politica optima
+    politica = politica_optima_mdp(
+        estados,
+        acciones_por_estado,
+        transicion_prob,
+        recompensa,
+        descuento,
+        valores
     )
 
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
+    print("\npolitica optima:")
 
-    print("costo total:")
-    print(costo_total2)
+    for estado in estados:
+        print(
+            estado,
+            "->",
+            politica[estado]
+        )
 
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+    # - mdp usa probabilidades en las transiciones
+    # - iteracion de valores calcula que tan bueno es cada estado
+    # - politica optima escoge la accion con mejor valor esperado

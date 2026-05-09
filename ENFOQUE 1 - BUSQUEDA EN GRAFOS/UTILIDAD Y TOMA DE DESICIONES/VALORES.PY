@@ -1,214 +1,223 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# Planeacion de rutas con iteracion de valores
+# imaginemos un robot repartidor en una ciudad.
+# el robot quiere llegar a la "entrega"
+# ganando la mayor cantidad de puntos posibles.
+# cada lugar tiene diferentes caminos y costos.
+# la idea:
+# calcular que tan bueno es estar en cada lugar
+# suponiendo que el robot siempre elegira el mejor camino despues.
 
-import heapq
+# formula:
+# valor(lugar) =
+# recompensa inmediata +
+# descuento * mejor valor futuro posible
 
+def calcular_valores(lugares, movimientos, siguiente_lugar, ganancia, descuento, iteraciones):
+    """
+    calcula el valor aproximado de cada lugar.
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+    lugares:
+        lista de lugares
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    movimientos:
+        dict lugar -> lista de movimientos posibles
 
-    if origen == destino:
-        return [origen], 0
+    siguiente_lugar(lugar, movimiento):
+        dice a donde llego
 
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
-    }
+    ganancia(lugar, movimiento):
+        puntos inmediatos del movimiento
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+    descuento:
+        que tanto importa el futuro
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
-    )
+    iteraciones:
+        cuantas veces se actualizan los valores
+    """
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
-    )
+    # empezamos suponiendo que todos valen 0
+    valores = {}
 
-    explorados = set()
+    for lugar in lugares:
+        valores[lugar] = 0
 
-    while pendientes:
+    # repetimos varias veces
+    for _ in range(iteraciones):
 
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
-        )
+        nuevos = {}
 
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
+        for lugar in lugares:
 
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
+            opciones = movimientos[lugar]
 
-        explorados.add(nodo_actual)
+            # si no hay movimientos posibles
+            # es un lugar final
+            if len(opciones) == 0:
+                nuevos[lugar] = 0
 
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
+            else:
+                posibles_valores = []
 
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
-            )
+                # revisamos cada movimiento
+                for mov in opciones:
 
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
+                    destino = siguiente_lugar(lugar, mov)
 
-                costos_reales[vecino] = nuevo_costo
+                    recompensa_actual = ganancia(lugar, mov)
 
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
+                    # valor estimado:
+                    # recompensa actual +
+                    # valor futuro descontado
+                    valor_estimado = (
+                        recompensa_actual +
+                        descuento * valores[destino]
                     )
+
+                    posibles_valores.append(valor_estimado)
+
+                # nos quedamos con el mejor movimiento
+                nuevos[lugar] = max(posibles_valores)
+
+        valores = nuevos
+
+    return valores
+
+
+def mejor_ruta(lugares, movimientos, siguiente_lugar, ganancia, valores, descuento):
+    """
+    decide cual es el mejor movimiento
+    en cada lugar.
+    """
+
+    politica = {}
+
+    for lugar in lugares:
+
+        opciones = movimientos[lugar]
+
+        if len(opciones) == 0:
+
+            politica[lugar] = None
+
+        else:
+
+            mejor_movimiento = None
+            mejor_puntaje = None
+
+            for mov in opciones:
+
+                destino = siguiente_lugar(lugar, mov)
+
+                puntaje = (
+                    ganancia(lugar, mov) +
+                    descuento * valores[destino]
                 )
 
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
-                    )
-                )
+                if (
+                    mejor_movimiento is None or
+                    puntaje > mejor_puntaje
+                ):
+                    mejor_movimiento = mov
+                    mejor_puntaje = puntaje
 
-    # no fue posible llegar al destino
-    return None, None
+            politica[lugar] = mejor_movimiento
 
-
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+    return politica
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
+    # lugares del mapa
+    lugares = [
+        "bodega",
+        "cruce",
+        "entrega"
+    ]
 
-    grafo = {
+    # movimientos posibles
+    movimientos = {
+        "bodega": [
+            "camino_rapido",
+            "camino_largo"
+        ],
 
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
-        },
+        "cruce": [
+            "seguir"
+        ],
 
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
-
-        "universidad": {
-            "empresa": 4
-        },
-
-        "jardin": {
-            "clinica": 2
-        },
-
-        "clinica": {
-            "empresa": 3
-        },
-
-        "empresa": {}
+        "entrega": []
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
+    def siguiente_lugar(lugar, movimiento):
 
-    heuristica = {
+        if lugar == "bodega" and movimiento == "camino_rapido":
+            return "entrega"
 
-        "empresa": 0,
+        if lugar == "bodega" and movimiento == "camino_largo":
+            return "cruce"
 
-        "clinica": 2,
+        if lugar == "cruce" and movimiento == "seguir":
+            return "entrega"
 
-        "universidad": 3,
+        return lugar
 
-        "jardin": 4,
+    def ganancia(lugar, movimiento):
 
-        "mercado": 4,
+        # camino rapido:
+        # llega directo pero gasta mucha bateria
+        if lugar == "bodega" and movimiento == "camino_rapido":
+            return 8
 
-        "hogar": 6
-    }
+        # camino largo:
+        # tarda mas pero recoge otro paquete
+        if lugar == "bodega" and movimiento == "camino_largo":
+            return 5
 
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
+        # seguir desde cruce hasta entrega
+        if lugar == "cruce" and movimiento == "seguir":
+            return 6
+
+        return 0
+
+    factor_descuento = 0.9
+
+    valores = calcular_valores(
+        lugares,
+        movimientos,
+        siguiente_lugar,
+        ganancia,
+        factor_descuento,
+        iteraciones=10
     )
 
-    print("ruta calculada con A*:")
-    print(ruta)
+    print("valor estimado de cada lugar:")
 
-    print("costo total:")
-    print(costo_total)
+    for lugar in lugares:
+        print(
+            lugar,
+            "->",
+            valores[lugar]
+        )
 
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
+    politica = mejor_ruta(
+        lugares,
+        movimientos,
+        siguiente_lugar,
+        ganancia,
+        valores,
+        factor_descuento
     )
 
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
+    print("\nmejor movimiento en cada lugar:")
 
-    print("costo total:")
-    print(costo_total2)
+    for lugar in lugares:
+        print(
+            lugar,
+            "->",
+            politica[lugar]
+        )
 
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+    # el algoritmo:
+    # - calcula que tan conveniente es cada lugar
+    # - considera recompensa actual y futuro
+    # - despues escoge el mejor movimiento posible

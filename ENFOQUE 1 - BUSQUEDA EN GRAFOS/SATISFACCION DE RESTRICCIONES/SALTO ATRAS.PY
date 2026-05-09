@@ -1,217 +1,165 @@
-# búsqueda tabú
-#
-# este método es similar
-# a la ascensión de colinas
-# pero incorpora memoria
-#
-# problema de hill climbing:
-# puede quedarse atrapado
-# repitiendo los mismos estados
-#
-# para evitarlo se usa
-# una lista tabú
-#
-# la lista tabú almacena
-# estados recientes que
-# temporalmente no se pueden usar
+# salto atras dirigido por conflictos
+# es parecido a backtracking, pero mas inteligente.
+# cuando encuentra un conflicto, intenta brincar directo
+# a la variable que lo causo.
+
+def revisar_reglas(asignacion):
+    """
+    revisa si la asignacion actual rompe alguna regla
+    """
+
+    # regla 1:
+    # no puede haber dos examenes el mismo dia
+    materias = list(asignacion.keys())
+
+    for i in range(len(materias)):
+        for j in range(i + 1, len(materias)):
+
+            m1 = materias[i]
+            m2 = materias[j]
+
+            # conflicto: mismo dia
+            if asignacion[m1] == asignacion[m2]:
+                return False, ("same_day", m2)
+
+    # regla 2:
+    # prog no puede ser lunes
+    if "prog" in asignacion:
+
+        if asignacion["prog"] == "lunes":
+            return False, ("prog_lunes", "prog")
+
+    return True, None
 
 
-def seleccionar_vecino_valido(
-    estado_actual,
-    conexiones,
-    funcion_valor,
-    lista_tabu
-):
+def salto_atras_conflictos(variables, dominios):
 
-    # estado_actual:
-    # nodo donde nos encontramos
-    #
-    # conexiones:
-    # vecinos disponibles
-    #
-    # funcion_valor:
-    # evalúa qué tan bueno es un estado
-    #
-    # lista_tabu:
-    # estados prohibidos temporalmente
-    #
-    # retorna:
-    # el mejor vecino permitido
-    # o None si no existe uno válido
+    # guardamos posicion de cada variable
+    # esto ayuda a saber hasta donde brincar
+    indice_variable = {}
 
-    mejor_candidato = None
+    for i, var in enumerate(variables):
+        indice_variable[var] = i
 
-    mejor_puntaje = None
+    # historial para ver que hizo el algoritmo
+    historial_debug = []
 
-    for vecino in conexiones.get(
-        estado_actual,
-        []
-    ):
+    def intentar(index, asignacion_actual):
 
-        # ignoramos estados tabú
-        if vecino in lista_tabu:
-            continue
+        # si ya asignamos todas las variables
+        # ya encontramos solucion
+        if index == len(variables):
+            return asignacion_actual.copy(), None
 
-        puntaje = funcion_valor(vecino)
+        var_actual = variables[index]
 
-        # seleccionamos el vecino
-        # con mayor valor
-        if (
-            mejor_candidato is None
-            or puntaje > mejor_puntaje
-        ):
+        # por defecto:
+        # salto atras normal
+        mejor_salto = index - 1
 
-            mejor_candidato = vecino
+        # probar cada valor posible
+        for valor in dominios[var_actual]:
 
-            mejor_puntaje = puntaje
+            asignacion_actual[var_actual] = valor
 
-    return mejor_candidato
+            ok, conflicto = revisar_reglas(asignacion_actual)
 
+            historial_debug.append(
+                f"probando {var_actual} = {valor} -> {'ok' if ok else 'conflicto'}"
+            )
 
-def algoritmo_tabu(
-    inicio,
-    conexiones,
-    funcion_valor,
-    limite_tabu,
-    iteraciones_maximas
-):
+            if ok:
 
-    # inicio:
-    # estado inicial
-    #
-    # conexiones:
-    # posibles movimientos
-    #
-    # funcion_valor:
-    # mide la calidad de cada estado
-    #
-    # limite_tabu:
-    # tamaño máximo de memoria tabú
-    #
-    # iteraciones_maximas:
-    # cantidad máxima de movimientos
-    #
-    # retorna:
-    # (mejor_estado, historial)
+                # seguir con siguiente variable
+                solucion, salto = intentar(
+                    index + 1,
+                    asignacion_actual
+                )
 
-    actual = inicio
+                # si encontramos solucion final
+                if solucion is not None:
+                    return solucion, None
 
-    # mejor estado encontrado
-    mejor_global = actual
+                # si el conflicto viene de mas atras
+                # propagamos el salto
+                if salto is not None and salto < index:
 
-    historial = [actual]
+                    del asignacion_actual[var_actual]
 
-    # estructuras de memoria tabú
-    tabu = {actual}
+                    return None, salto
 
-    cola_tabu = [actual]
+            else:
 
-    for _ in range(iteraciones_maximas):
+                tipo_conflicto, variable_conflictiva = conflicto
 
-        siguiente = seleccionar_vecino_valido(
-            actual,
-            conexiones,
-            funcion_valor,
-            tabu
-        )
+                if tipo_conflicto == "same_day":
 
-        # si no hay movimientos válidos
-        # termina la búsqueda
-        if siguiente is None:
-            break
+                    # brincar a variable que causo el choque
+                    salto_conflicto = indice_variable[variable_conflictiva]
 
-        # avanzar al siguiente estado
-        actual = siguiente
+                elif tipo_conflicto == "prog_lunes":
 
-        historial.append(actual)
+                    salto_conflicto = indice_variable["prog"]
 
-        # agregar a lista tabú
-        tabu.add(actual)
+                else:
 
-        cola_tabu.append(actual)
+                    salto_conflicto = index - 1
 
-        # controlar tamaño máximo
-        if len(cola_tabu) > limite_tabu:
+                # guardar salto mas lejano
+                if salto_conflicto < mejor_salto:
+                    mejor_salto = salto_conflicto
 
-            estado_viejo = cola_tabu.pop(0)
+            # quitar intento actual
+            del asignacion_actual[var_actual]
 
-            if estado_viejo in tabu:
-                tabu.remove(estado_viejo)
+        # no hubo solucion desde esta variable
+        return None, mejor_salto
 
-        # actualizar mejor solución global
-        if (
-            funcion_valor(actual)
-            > funcion_valor(mejor_global)
-        ):
+    solucion_final, _ = intentar(0, {})
 
-            mejor_global = actual
-
-    return mejor_global, historial
+    return solucion_final, historial_debug
 
 
 if __name__ == "__main__":
 
-    # conexiones entre estados
-    #
-    # números mayores
-    # representan mejores soluciones
+    # variables = materias
+    variables = [
+        "mate",
+        "fisica",
+        "prog"
+    ]
 
-    conexiones = {
+    # dominios = dias posibles
+    dominios = {
 
-        3: [4, 5, 6],
+        "mate": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        4: [5, 6],
+        "fisica": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ],
 
-        5: [4, 6, 7],
-
-        6: [5, 7, 8],
-
-        7: [6, 8, 9],
-
-        8: [7, 9],
-
-        9: [8]
+        "prog": [
+            "lunes",
+            "miercoles",
+            "viernes"
+        ]
     }
 
-    # función de evaluación
-    #
-    # mientras mayor sea el número
-    # mejor es el estado
-
-    def funcion_valor(x):
-        return x
-
-    # parámetros principales:
-    #
-    # inicio = 3
-    #
-    # limite_tabu = 3
-    # cantidad máxima de estados prohibidos
-    #
-    # iteraciones_maximas = 10
-    # número máximo de movimientos
-
-    mejor_estado, recorrido = algoritmo_tabu(
-        inicio=3,
-        conexiones=conexiones,
-        funcion_valor=funcion_valor,
-        limite_tabu=3,
-        iteraciones_maximas=10
+    solucion, debug = salto_atras_conflictos(
+        variables,
+        dominios
     )
 
-    print("mejor estado encontrado:")
-    print(mejor_estado)
+    print("solucion encontrada:")
+    print(solucion)
 
-    print("historial de movimientos:")
-    print(recorrido)
+    print("\npasos del algoritmo:")
 
-    # resumen:
-    #
-    # - la memoria tabú evita
-    #   regresar inmediatamente
-    #   a estados recientes
-    #
-    # - esto reduce ciclos repetitivos
-    #
-    # - mejor_global almacena
-    #   la mejor solución encontrada
+    for linea in debug:
+        print(linea)

@@ -1,214 +1,173 @@
-# búsqueda A*
-# este algoritmo intenta encontrar
-# una ruta eficiente hacia el objetivo
-#
-# para decidir qué nodo explorar utiliza:
-#
-# f(n) = g(n) + h(n)
-#
-# g(n) -> costo acumulado real
-# h(n) -> estimación faltante hasta la meta
-#
-# el algoritmo siempre prioriza
-# el nodo con menor valor de f
+# Teoria de la utilidad: funcion de utilidad
+# la utilidad representa que tan conveniente es un resultado.
+# en este ejemplo una empresa debe decidir
+# si enviar productos por envio rapido o envio economico.
 
-import heapq
+# cada decision puede terminar en diferentes resultados:
+# - entrega exitosa
+# - retraso
+# - perdida del paquete
+
+# cada resultado tiene:
+# - una utilidad
+# - una probabilidad de ocurrir
+
+# la idea:
+# calcular utilidad esperada de cada estrategia
+# y escoger la mejor.
 
 
-def busqueda_a_estrella(grafo, heuristica, origen, destino):
+def obtener_utilidad(evento):
+    """
+    asigna utilidad a cada posible resultado
 
-    # heuristica:
-    # estimación de distancia al objetivo
-    #
-    # origen:
-    # nodo inicial
-    #
-    # destino:
-    # nodo que queremos alcanzar
-    #
-    # retorna:
-    # (ruta, costo_total)
-    # o (None, None) si no existe camino
+    entre mas alto el numero, mejor fue el resultado
+    """
 
-    if origen == destino:
-        return [origen], 0
+    utilidades = {
 
-    # diccionario con el costo real
-    # acumulado para cada nodo
-    costos_reales = {
-        origen: 0
+        # envio rapido
+        "rapido_entrega_ok": 90,
+        "rapido_retraso": 20,
+        "rapido_perdido": -80,
+
+        # envio economico
+        "economico_entrega_ok": 60,
+        "economico_retraso": 10,
+        "economico_perdido": -40
     }
 
-    # cola de prioridad:
-    # (valor_f, nodo_actual, camino)
-    pendientes = []
+    return utilidades[evento]
 
-    f_inicial = (
-        costos_reales[origen]
-        + heuristica.get(origen, float("inf"))
-    )
 
-    heapq.heappush(
-        pendientes,
-        (f_inicial, origen, [origen])
-    )
+def calcular_utilidad_esperada(
+    decision,
+    escenarios_probables
+):
+    """
+    calcula:
 
-    explorados = set()
+    utilidad_esperada =
+    suma(probabilidad * utilidad)
+    """
 
-    while pendientes:
+    utilidad_total = 0
 
-        f_actual, nodo_actual, ruta_actual = heapq.heappop(
-            pendientes
+    for evento, probabilidad in escenarios_probables[decision]:
+
+        utilidad = obtener_utilidad(evento)
+
+        contribucion = (
+            probabilidad *
+            utilidad
         )
 
-        # si llegamos al destino
-        # terminamos la búsqueda
-        if nodo_actual == destino:
-            return ruta_actual, costos_reales[nodo_actual]
+        utilidad_total += contribucion
 
-        # evitamos volver a procesar nodos
-        if nodo_actual in explorados:
-            continue
+        print(
+            " decision:",
+            decision,
+            "| evento:",
+            evento,
+            "| contribucion:",
+            contribucion
+        )
 
-        explorados.add(nodo_actual)
-
-        # revisamos las conexiones vecinas
-        for vecino, costo in grafo.get(
-            nodo_actual,
-            {}
-        ).items():
-
-            # nuevo costo acumulado
-            nuevo_costo = (
-                costos_reales[nodo_actual]
-                + costo
-            )
-
-            # si es la primera vez
-            # o encontramos una ruta mejor
-            if (
-                vecino not in costos_reales
-                or nuevo_costo < costos_reales[vecino]
-            ):
-
-                costos_reales[vecino] = nuevo_costo
-
-                nueva_ruta = ruta_actual + [vecino]
-
-                # cálculo de f(n)
-                valor_f = (
-                    nuevo_costo
-                    + heuristica.get(
-                        vecino,
-                        float("inf")
-                    )
-                )
-
-                heapq.heappush(
-                    pendientes,
-                    (
-                        valor_f,
-                        vecino,
-                        nueva_ruta
-                    )
-                )
-
-    # no fue posible llegar al destino
-    return None, None
+    return utilidad_total
 
 
-# comentario sobre AO*
-#
-# AO* se utiliza en grafos AND-OR
-# donde algunos pasos requieren
-# completar varias acciones relacionadas
-#
-# normalmente en cursos introductorios
-# solo se revisa la teoría general
-# y no suele implementarse en código
+def seleccionar_mejor_opcion(
+    opciones,
+    escenarios_probables
+):
+    """
+    compara utilidad esperada de todas las opciones
+    """
+
+    mejor_opcion = None
+    mejor_utilidad = None
+
+    for opcion in opciones:
+
+        print("\ncalculando para:", opcion)
+
+        utilidad = calcular_utilidad_esperada(
+            opcion,
+            escenarios_probables
+        )
+
+        print(
+            " utilidad esperada total de",
+            opcion,
+            "=",
+            utilidad
+        )
+
+        if (
+            mejor_opcion is None or
+            utilidad > mejor_utilidad
+        ):
+            mejor_opcion = opcion
+            mejor_utilidad = utilidad
+
+    return mejor_opcion, mejor_utilidad
 
 
 if __name__ == "__main__":
 
-    # grafo con costos de desplazamiento
+    # decisiones posibles
+    opciones = [
+        "envio_rapido",
+        "envio_economico"
+    ]
 
-    grafo = {
+    # escenarios y probabilidades
+    escenarios_probables = {
 
-        "hogar": {
-            "mercado": 2,
-            "jardin": 5
-        },
+        "envio_rapido": [
 
-        "mercado": {
-            "universidad": 2,
-            "clinica": 5
-        },
+            # llega bien
+            ("rapido_entrega_ok", 0.85),
 
-        "universidad": {
-            "empresa": 4
-        },
+            # llega tarde
+            ("rapido_retraso", 0.10),
 
-        "jardin": {
-            "clinica": 2
-        },
+            # se pierde
+            ("rapido_perdido", 0.05)
+        ],
 
-        "clinica": {
-            "empresa": 3
-        },
+        "envio_economico": [
 
-        "empresa": {}
+            # llega bien
+            ("economico_entrega_ok", 0.60),
+
+            # llega tarde
+            ("economico_retraso", 0.30),
+
+            # se pierde
+            ("economico_perdido", 0.10)
+        ]
     }
 
-    # heurística:
-    # estimación de cercanía
-    # respecto al nodo "empresa"
-
-    heuristica = {
-
-        "empresa": 0,
-
-        "clinica": 2,
-
-        "universidad": 3,
-
-        "jardin": 4,
-
-        "mercado": 4,
-
-        "hogar": 6
-    }
-
-    ruta, costo_total = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "empresa"
+    # buscamos mejor decision
+    mejor, utilidad = seleccionar_mejor_opcion(
+        opciones,
+        escenarios_probables
     )
 
-    print("ruta calculada con A*:")
-    print(ruta)
+    print("\nmejor estrategia:")
 
-    print("costo total:")
-    print(costo_total)
-
-    ruta2, costo_total2 = busqueda_a_estrella(
-        grafo,
-        heuristica,
-        "hogar",
-        "aeropuerto"
+    print(
+        " opcion elegida ->",
+        mejor
     )
 
-    print("ruta hacia aeropuerto:")
-    print(ruta2)
+    print(
+        " utilidad esperada ->",
+        utilidad
+    )
 
-    print("costo total:")
-    print(costo_total2)
-
-    # resumen:
-    #
-    # g(n) -> costo recorrido
-    # h(n) -> estimación restante
-    # f(n) -> suma de ambos valores
-    #
-    # A* prioriza el nodo
-    # con el menor valor de f
+    # - la utilidad representa que tan bueno es un resultado
+    # - cada resultado tiene cierta probabilidad
+    # - utilidad esperada = suma(probabilidad * utilidad)
+    # - la mejor decision es la que da mayor utilidad esperada
